@@ -11,7 +11,7 @@ pyyaml
 scipy
 seqeval
 scikit-learn
-spacy
+spacy==3.7.5
 submitit
 transformers==4.17.0
 wandb
