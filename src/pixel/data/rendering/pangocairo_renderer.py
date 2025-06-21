@@ -10,6 +10,8 @@ import gi
 import manimpango
 import numpy as np
 from fontTools import ttLib
+os.environ["PANGOCAIRO_BACKEND"] = "fontconfig"
+os.environ["FONTCONFIG_FILE"] = "/usr/local/etc/fonts/pixel.conf"
 
 gi.require_version("Pango", "1.0")
 gi.require_version("PangoCairo", "1.0")
@@ -1178,3 +1180,16 @@ class PangoCairoTextRenderer(TextRenderingMixin):
         scaled_font_size = (self.dpi / 72) * self.font_size
         font_str = f"{font_family_name} {scaled_font_size}px"
         self.font = Pango.font_description_from_string(font_str)
+
+    def get_text_width(self, text: str) -> int:
+        """
+        Returns the width in pixels of the given text using the current font.
+        """
+        # Create a dummy Cairo surface/context (not rendered)
+        surface = cairo.ImageSurface(cairo.FORMAT_A8, 1, 1)
+        context = cairo.Context(surface)
+        layout = PangoCairo.create_layout(context)
+        layout.set_font_description(self.font)
+        layout.set_text(text, -1)
+        width, _ = layout.get_pixel_size()
+        return width
