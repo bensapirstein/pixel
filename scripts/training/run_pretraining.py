@@ -29,7 +29,7 @@ from pixel import (
     PIXELForPreTraining,
     PIXELTrainerForPretraining,
     SpanMaskingGenerator,
-    PyGameTextRenderer,
+    PangoCairoTextRenderer,
     get_attention_mask,
     get_transforms,
     get_2d_sincos_pos_embed
@@ -360,7 +360,7 @@ def main(config_dict: Dict[str, Any] = None):
         model = PIXELForPreTraining(config)
 
     # Load text renderer
-    text_renderer = PyGameTextRenderer.from_pretrained(model_args.text_renderer_name_or_path, **config_kwargs)
+    text_renderer = PangoCairoTextRenderer.from_pretrained(model_args.text_renderer_name_or_path, **config_kwargs)
 
     # Load or create feature extractor
     if model_args.feature_extractor_name:

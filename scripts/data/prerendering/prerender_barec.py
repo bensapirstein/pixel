@@ -19,7 +19,6 @@ logger = logging.getLogger(__name__)
 def main(args: argparse.Namespace):
     # Load PyGame renderer
     # PangoCairoTextRenderer will be a better choice. We used the PyGame renderer, so we kept this for reproducibility
-    pygame_renderer = PyGameTextRenderer.from_pretrained(args.renderer_name_or_path, use_auth_token=args.auth_token)
     text_renderer = PangoCairoTextRenderer.from_pretrained(args.renderer_name_or_path, use_auth_token=args.auth_token)
 
     data = {"pixel_values": [], "num_patches": []}
@@ -31,7 +30,7 @@ def main(args: argparse.Namespace):
         "total_num_words": 0,
     }
 
-    barec = load_dataset("CAMeL-Lab/BAREC-Shared-Task-2025-doc", split="train", streaming=True)
+    barec = load_dataset("CAMeL-Lab/BAREC-Shared-Task-2025-doc", split=args.split, streaming=True)
 
     max_pixels = text_renderer.pixels_per_patch * text_renderer.max_seq_length - 2 * text_renderer.pixels_per_patch
     target_seq_length = max_pixels
@@ -54,7 +53,6 @@ def main(args: argparse.Namespace):
             if line:
                 dataset_stats["total_num_words"] += len(line.split(" "))
 
-                # line_width = text_renderer.font.get_rect(line).width
                 line_width = text_renderer.get_text_width(line)
                 if width + line_width >= target_seq_length:
                     idx += 1
@@ -88,6 +86,10 @@ def main(args: argparse.Namespace):
                 log_example_while_rendering(idx, sequence, encoding.num_text_patches)
                 dataset_stats = push_rendered_chunk_to_hub(args, data, dataset_stats, idx)
                 data = {"pixel_values": [], "num_patches": []}
+
+    # Upload remaining data if any
+    if len(data["pixel_values"]) > 0:
+        dataset_stats = push_rendered_chunk_to_hub(args, data, dataset_stats, idx)
 
     logger.info(f"Total num words in BAREC: {dataset_stats['total_num_words']}")
 
