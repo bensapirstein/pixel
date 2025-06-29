@@ -10,8 +10,6 @@ import gi
 import manimpango
 import numpy as np
 from fontTools import ttLib
-os.environ["PANGOCAIRO_BACKEND"] = "fontconfig"
-os.environ["FONTCONFIG_FILE"] = "/usr/local/etc/fonts/pixel.conf"
 
 gi.require_version("Pango", "1.0")
 gi.require_version("PangoCairo", "1.0")

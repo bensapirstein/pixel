@@ -4,17 +4,16 @@ export WANDB_PROJECT="pixel-experiments"
 # Settings
 export DATA_DIR=""
 export FALLBACK_FONTS_DIR="data/fallback_fonts"  # let's say this is where we downloaded the fonts to
-export MODEL="bensapir/pixel-barec-pretrain" # also works with "bert-base-cased", "roberta-base", etc.
-export BSZ=16
+export MODEL="bensapir/pixel-barec-pretrain-64" # also works with "bert-base-cased", "roberta-base", etc.
+export BSZ=64
 export GRAD_ACCUM=1
 export LR=1.5e-4
 export SEED=42
-export NUM_STEPS=200000
+export NUM_STEPS=500000
 
 export RUN_NAME="pixel-barec-pretrain-$(basename ${MODEL})-${BSZ}-${GRAD_ACCUM}-${LR}-${NUM_STEPS}-${SEED}"
 
 python scripts/training/run_pretraining.py \
-  --model_name_or_path=${MODEL} \
   --train_dataset_names="bensapir/pixel-barec-pretrain" \
   --validation_dataset_name="bensapir/pixel-barec-pretrain" \
   --dataset_cache="data/pixel-barec-pretrain" \
@@ -48,4 +47,7 @@ python scripts/training/run_pretraining.py \
   --masking_max_span_length=6 \
   --masking_cumulative_span_weights="0.2,0.4,0.6,0.8,0.9,1" \
   --dropout_prob=0.1 \
-  --output_dir="pixel-barec-pretrain"
+  --output_dir=${MODEL} \
+  --overwrite_output_dir \
+  --fp16 \
+  --half_precision_backend=apex \

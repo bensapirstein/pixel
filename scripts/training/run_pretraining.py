@@ -272,7 +272,7 @@ def main(config_dict: Dict[str, Any] = None):
             d_name,
             d_config,
             split=d_split,
-            use_auth_token=model_args.use_auth_token,
+            token=model_args.use_auth_token,
             streaming=data_args.streaming,
             cache_dir=d_cache,
         )
@@ -302,7 +302,7 @@ def main(config_dict: Dict[str, Any] = None):
         )
 
     validation_dataset = load_dataset(
-        data_args.validation_dataset_name, split=data_args.validation_split, use_auth_token=model_args.use_auth_token
+        data_args.validation_dataset_name, split=data_args.validation_split, token=model_args.use_auth_token
     )
 
     config_kwargs = {

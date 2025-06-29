@@ -3,7 +3,7 @@ export WANDB_PROJECT="pixel-experiments"
 
 # Settings
 export FALLBACK_FONTS_DIR="data/fallback_fonts"  # let's say this is where we downloaded the fonts to
-export MODEL="Team-PIXEL/pixel-base" # also works with "bert-base-cased", "roberta-base", etc.
+export MODEL="bensapir/pixel-barec-pretrain" # also works with "bert-base-cased", "roberta-base", etc.
 export SEQ_LEN=256
 export BSZ=64
 export GRAD_ACCUM=1
@@ -30,10 +30,11 @@ python scripts/training/run_readability.py \
   --gradient_accumulation_steps=${GRAD_ACCUM} \
   --learning_rate=${LR} \
   --warmup_steps=100 \
-  --run_name=arabic-readability-experiment \
-  --output_dir=runs/arabic-readability \
+  --run_name="arabic-readability-strict" \
+  --output_dir="runs/arabic-readability-strict" \
   --overwrite_output_dir \
   --overwrite_cache \
+  --text_renderer_name_or_path="configs/renderers/noto_renderer" \
   --logging_strategy=steps \
   --logging_steps=1000 \
   --evaluation_strategy=steps \

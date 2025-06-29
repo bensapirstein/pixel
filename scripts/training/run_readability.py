@@ -136,15 +136,18 @@ class ModelArguments:
     """
     Arguments pertaining to which model/config/tokenizer we are going to fine-tune from.
     """
-
     model_name_or_path: str = field(
         metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models"}
     )
+    text_renderer_name_or_path: str = field(
+        default=None,
+        metadata={
+            "help": "Path / Huggingface identifier of the text renderer that was used to prerender the "
+            "training/validation data."
+        }
+    )
     config_name: Optional[str] = field(
         default=None, metadata={"help": "Pretrained config name or path if not the same as model_name"}
-    )
-    processor_name: Optional[str] = field(
-        default=None, metadata={"help": "Pretrained processor name or path if not the same as model_name"}
     )
     rendering_backend: Optional[str] = field(
         default="pangocairo", metadata={
@@ -203,7 +206,7 @@ class ModelArguments:
 def get_processor(model_args: argparse.Namespace, modality: Modality):
     if modality == Modality.TEXT:
         processor = AutoTokenizer.from_pretrained(
-            model_args.processor_name if model_args.processor_name else model_args.model_name_or_path,
+            model_args.text_renderer_name_or_path if model_args.processor_name else model_args.model_name_or_path,
             use_fast=True,
             add_prefix_space=True if model_args.model_name_or_path == "roberta-base" else False,
             cache_dir=model_args.cache_dir,
@@ -213,7 +216,7 @@ def get_processor(model_args: argparse.Namespace, modality: Modality):
     elif modality == Modality.IMAGE:
         renderer_cls = PyGameTextRenderer if model_args.rendering_backend == "pygame" else PangoCairoTextRenderer
         processor = renderer_cls.from_pretrained(
-            model_args.processor_name if model_args.processor_name else model_args.model_name_or_path,
+            model_args.text_renderer_name_or_path if model_args.text_renderer_name_or_path else model_args.model_name_or_path,
             cache_dir=model_args.cache_dir,
             revision=model_args.model_revision,
             use_auth_token=model_args.use_auth_token if model_args.use_auth_token else None,
