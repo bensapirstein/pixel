@@ -28,7 +28,7 @@ import datasets
 import numpy as np
 import torch
 import transformers
-from datasets import load_dataset, load_metric
+from datasets import load_dataset
 from PIL import Image
 from pixel import (
     AutoConfig,
@@ -40,6 +40,7 @@ from pixel import (
     PIXELTrainingArguments,
     PoolingMode,
     PyGameTextRenderer,
+    BARECDataset,
     get_attention_mask,
     get_transforms,
     glue_strip_spaces,
@@ -54,7 +55,7 @@ from transformers import (
     HfArgumentParser,
     PretrainedConfig,
     PreTrainedTokenizerFast,
-    set_seed,
+    set_seed, default_data_collator,
 )
 from transformers.trainer_utils import get_last_checkpoint
 from transformers.utils import check_min_version
@@ -64,17 +65,6 @@ check_min_version("4.17.0")
 
 require_version("datasets>=1.8.0", "To fix: pip install ./datasets")
 
-task_to_keys = {
-    "cola": ("sentence", None),
-    "mnli": ("premise", "hypothesis"),
-    "mrpc": ("sentence1", "sentence2"),
-    "qnli": ("question", "sentence"),
-    "qqp": ("question1", "question2"),
-    "rte": ("sentence1", "sentence2"),
-    "sst2": ("sentence", None),
-    "stsb": ("sentence1", "sentence2"),
-    "wnli": ("sentence1", "sentence2"),
-}
 
 logger = logging.getLogger(__name__)
 
@@ -88,11 +78,6 @@ class DataTrainingArguments:
     into argparse arguments to be able to specify them on
     the command line.
     """
-
-    task_name: Optional[str] = field(
-        default=None,
-        metadata={"help": "The name of the task to train on: " + ", ".join(task_to_keys.keys())},
-    )
     dataset_name: Optional[str] = field(
         default=None, metadata={"help": "The name of the dataset to use (via the datasets library)."}
     )
@@ -144,23 +129,6 @@ class DataTrainingArguments:
         default=None, metadata={"help": "A csv or a json file containing the validation data."}
     )
     test_file: Optional[str] = field(default=None, metadata={"help": "A csv or a json file containing the test data."})
-
-    def __post_init__(self):
-        if self.task_name is not None:
-            self.task_name = self.task_name.lower()
-            if self.task_name not in task_to_keys.keys():
-                raise ValueError("Unknown task, you should pick one in " + ",".join(task_to_keys.keys()))
-        elif self.dataset_name is not None:
-            pass
-        elif self.train_file is None or self.validation_file is None:
-            raise ValueError("Need either a GLUE task, a training/validation file or a dataset name.")
-        else:
-            train_extension = self.train_file.split(".")[-1]
-            assert train_extension in ["csv", "json"], "`train_file` should be a csv or a json file."
-            validation_extension = self.validation_file.split(".")[-1]
-            assert (
-                validation_extension == train_extension
-            ), "`validation_file` should have the same extension (csv or json) as `train_file`."
 
 
 @dataclass
@@ -217,13 +185,6 @@ class ModelArguments:
         default="mean",
         metadata={
             "help": f"Pooling mode to use in classification head (options are {[e.value for e in PoolingMode]}."
-        },
-    )
-    pooler_add_layer_norm: bool = field(
-        default=True,
-        metadata={
-            "help": "Whether to add layer normalization to the classification head pooler. Note that this flag is"
-            "ignored and no layer norm is added when using CLS pooling mode."
         },
     )
     dropout_prob: float = field(
@@ -328,62 +289,40 @@ def get_collator(
 
     return collator
 
-
-def get_preprocess_fn(
+def get_dataset(
+    config: PretrainedConfig,
     data_args: argparse.Namespace,
     processor: Union[Union[PyGameTextRenderer, PangoCairoTextRenderer], PreTrainedTokenizerFast],
     modality: Modality,
-    sentence_keys: Tuple[str, Optional[str]],
+    split: str,
 ):
-    sentence1_key, sentence2_key = sentence_keys
-
+    kwargs = {}
     if modality == Modality.IMAGE:
         transforms = get_transforms(
             do_resize=True,
             size=(processor.pixels_per_patch, processor.pixels_per_patch * processor.max_seq_length),
         )
-        format_fn = glue_strip_spaces
-
-        def image_preprocess_fn(examples):
-            if sentence2_key:
-                encodings = [
-                    processor(text=(format_fn(a), format_fn(b)))
-                    for a, b in zip(examples[sentence1_key], examples[sentence2_key])
-                ]
-            else:
-                encodings = [processor(text=format_fn(a)) for a in examples[sentence1_key]]
-
-            examples["pixel_values"] = [transforms(Image.fromarray(e.pixel_values)) for e in encodings]
-            examples["attention_mask"] = [
-                get_attention_mask(e.num_text_patches, seq_length=data_args.max_seq_length) for e in encodings
-            ]
-
-            return examples
-
-        preprocess_fn = image_preprocess_fn
-
-    elif modality == Modality.TEXT:
-
-        def text_preprocess_fn(examples):
-            # Tokenize the texts
-            args = (
-                (examples[sentence1_key],)
-                if sentence2_key is None
-                else (examples[sentence1_key], examples[sentence2_key])
-            )
-            result = processor(*args, padding="max_length", max_length=data_args.max_seq_length, truncation=True)
-
-            if "label" in examples:
-                result["label"] = [l for l in examples["label"]]
-
-            return result
-
-        preprocess_fn = text_preprocess_fn
     else:
-        raise ValueError(f"Modality {modality} not supported.")
+        transforms = None
+        kwargs.update({
+            "sep_token_extra": bool(config.model_type in ["roberta"]),
+            "cls_token": processor.cls_token,
+            "sep_token": processor.sep_token,
+            "pad_token": processor.convert_tokens_to_ids([processor.pad_token])[0]
+        })
 
-    return preprocess_fn
+    return BARECDataset(
+        data_args.dataset_name,
+        processor=processor,
+        modality=modality,
+        max_seq_length=data_args.max_seq_length,
+        split=split,
+        transforms=transforms,
+    )
 
+def compute_metrics(p: EvalPrediction):
+    preds = np.argmax(p.predictions, axis=1)
+    return {"accuracy": (preds == p.label_ids).astype(np.float32).mean().item()}
 
 def main():
 
@@ -434,314 +373,59 @@ def main():
     # Set seed before initializing model.
     set_seed(training_args.seed)
 
-    # Get the datasets: you can either provide your own CSV/JSON training and evaluation files (see below)
-    # or specify a GLUE benchmark task (the dataset will be downloaded automatically from the datasets Hub).
-    #
-    # For CSV/JSON files, this script will use as labels the column called 'label' and as pair of sentences the
-    # sentences in columns called 'sentence1' and 'sentence2' if such column exists or the first two columns not named
-    # label if at least two columns are provided.
-    #
-    # If the CSVs/JSONs contain only one non-label column, the script does single sentence classification on this
-    # single column. You can easily tweak this behavior (see below)
-    #
-    # In distributed training, the load_dataset function guarantee that only one local process can concurrently
-    # download the dataset.
-    if data_args.task_name is not None:
-        # Downloading and loading a dataset from the hub.
-        raw_datasets = load_dataset("glue", data_args.task_name, cache_dir=model_args.cache_dir)
-    elif data_args.dataset_name is not None:
-        # Downloading and loading a dataset from the hub.
-        raw_datasets = load_dataset(
-            data_args.dataset_name, data_args.dataset_config_name, cache_dir=model_args.cache_dir
-        )
-    else:
-        # Loading a dataset from your local files.
-        # CSV/JSON training and evaluation files are needed.
-        data_files = {"train": data_args.train_file, "validation": data_args.validation_file}
-
-        # Get the test dataset: you can provide your own CSV/JSON test file (see below)
-        # when you use `do_predict` without specifying a GLUE benchmark task.
-        if training_args.do_predict:
-            if data_args.test_file is not None:
-                train_extension = data_args.train_file.split(".")[-1]
-                test_extension = data_args.test_file.split(".")[-1]
-                assert (
-                    test_extension == train_extension
-                ), "`test_file` should have the same extension (csv or json) as `train_file`."
-                data_files["test"] = data_args.test_file
-            else:
-                raise ValueError("Need either a GLUE task or a test file for `do_predict`.")
-
-        for key in data_files.keys():
-            logger.info(f"load a local file for {key}: {data_files[key]}")
-
-        if data_args.train_file.endswith(".csv"):
-            # Loading a dataset from local csv files
-            raw_datasets = load_dataset("csv", data_files=data_files, cache_dir=model_args.cache_dir)
-        else:
-            # Loading a dataset from local json files
-            raw_datasets = load_dataset("json", data_files=data_files, cache_dir=model_args.cache_dir)
-    # See more about loading any type of standard or custom dataset at
-    # https://huggingface.co/docs/datasets/loading_datasets.html.
-
     # Labels
-    if data_args.task_name is not None:
-        is_regression = data_args.task_name == "stsb"
-        if not is_regression:
-            label_list = raw_datasets["train"].features["label"].names
-            num_labels = len(label_list)
-        else:
-            num_labels = 1
-    else:
-        # Trying to have good defaults here, don't hesitate to tweak to your needs.
-        is_regression = raw_datasets["train"].features["label"].dtype in ["float32", "float64"]
-        if is_regression:
-            num_labels = 1
-        else:
-            # A useful fast method:
-            # https://huggingface.co/docs/datasets/package_reference/main_classes.html#datasets.Dataset.unique
-            label_list = raw_datasets["train"].unique("label")
-            label_list.sort()  # Let's sort it for determinism
-            num_labels = len(label_list)
+    num_labels = 19
+    modality = Modality.IMAGE
 
-    # Load pretrained model and config
-    model, config = get_model_and_config(model_args, num_labels, data_args.task_name)
-
-    # Preprocessing the raw_datasets
-    if data_args.task_name is not None:
-        sentence1_key, sentence2_key = task_to_keys[data_args.task_name]
-    else:
-        # Again, we try to have some nice defaults but don't hesitate to tweak to your use case.
-        non_label_column_names = [name for name in raw_datasets["train"].column_names if name != "label"]
-        if "sentence1" in non_label_column_names and "sentence2" in non_label_column_names:
-            sentence1_key, sentence2_key = "sentence1", "sentence2"
-        else:
-            if len(non_label_column_names) >= 2:
-                sentence1_key, sentence2_key = non_label_column_names[:2]
-            else:
-                sentence1_key, sentence2_key = non_label_column_names[0], None
-
-    # Some models have set the order of the labels to use, so let's make sure we do use it.
-    label_to_id = None
-    if (
-        model.config.label2id != PretrainedConfig(num_labels=num_labels).label2id
-        and data_args.task_name is not None
-        and not is_regression
-    ):
-        # Some have all caps in their config, some don't.
-        label_name_to_id = {k.lower(): v for k, v in model.config.label2id.items()}
-        if list(sorted(label_name_to_id.keys())) == list(sorted(label_list)):
-            label_to_id = {i: int(label_name_to_id[label_list[i]]) for i in range(num_labels)}
-        else:
-            logger.warning(
-                "Your model seems to have been trained with labels, but they don't match the dataset: ",
-                f"model labels: {list(sorted(label_name_to_id.keys()))}, dataset labels: {list(sorted(label_list))}."
-                "\nIgnoring the model labels as a result.",
-            )
-    elif data_args.task_name is None and not is_regression:
-        label_to_id = {v: i for i, v in enumerate(label_list)}
-
-    if label_to_id is not None:
-        model.config.label2id = label_to_id
-        model.config.id2label = {id: label for label, id in config.label2id.items()}
-    elif data_args.task_name is not None and not is_regression:
-        model.config.label2id = {l: i for i, l in enumerate(label_list)}
-        model.config.id2label = {id: label for label, id in config.label2id.items()}
-
-    modality = Modality.TEXT if config.model_type in ["bert", "roberta"] else Modality.IMAGE
     processor = get_processor(model_args, modality)
+    if modality == Modality.IMAGE and hasattr(processor, "max_seq_length"):
+        processor.max_seq_length = data_args.max_seq_length
+
+    model = PIXELForSequenceClassification.from_pretrained(
+        model_args.model_name_or_path,
+        num_labels=num_labels,
+        pooling_mode=model_args.pooling_mode,
+        hidden_dropout_prob=model_args.dropout_prob,
+        attention_probs_dropout_prob=model_args.dropout_prob,
+    )
 
     if modality == Modality.IMAGE:
-        if processor.max_seq_length != data_args.max_seq_length:
-            processor.max_seq_length = data_args.max_seq_length
+        resize_model_embeddings(model, data_args.max_seq_length)
 
-        resize_model_embeddings(model, processor.max_seq_length)
+    data_collator = default_data_collator
+    # data_collator = get_collator(training_args, processor, modality)
 
-    preprocess_fn = get_preprocess_fn(data_args, processor, modality, (sentence1_key, sentence2_key))
+    # Load datasets
+    train_dataset = get_dataset(model.config, data_args, processor, modality, "train") if training_args.do_train else None
+    eval_dataset = get_dataset(model.config, data_args, processor, modality, "validation") if training_args.do_eval else None
+    test_dataset = get_dataset(model.config, data_args, processor, modality, "test") if data_args.test_file is not None else None
 
-    if training_args.do_train:
-        if "train" not in raw_datasets:
-            raise ValueError("--do_train requires a train dataset")
-        train_dataset = raw_datasets["train"]
-        if data_args.max_train_samples is not None:
-            train_dataset = train_dataset.select(range(data_args.max_train_samples))
-        if modality == Modality.IMAGE:
-            train_dataset.features["pixel_values"] = datasets.Image()
-        train_dataset.set_transform(preprocess_fn)
-
-    if training_args.do_eval:
-        if "validation" not in raw_datasets and "validation_matched" not in raw_datasets:
-            raise ValueError("--do_eval requires a validation dataset")
-        eval_dataset = raw_datasets["validation_matched" if data_args.task_name == "mnli" else "validation"]
-        if data_args.max_eval_samples is not None:
-            eval_dataset = eval_dataset.select(range(data_args.max_eval_samples))
-        if modality == Modality.IMAGE:
-            eval_dataset.features["pixel_values"] = datasets.Image()
-        eval_examples = copy.deepcopy(eval_dataset)
-        eval_dataset.set_transform(preprocess_fn)
-
-    if training_args.do_predict or data_args.task_name is not None or data_args.test_file is not None:
-        if "test" not in raw_datasets and "test_matched" not in raw_datasets:
-            raise ValueError("--do_predict requires a test dataset")
-        predict_dataset = raw_datasets["test_matched" if data_args.task_name == "mnli" else "test"]
-        if data_args.max_predict_samples is not None:
-            predict_dataset = predict_dataset.select(range(data_args.max_predict_samples))
-        if modality == Modality.IMAGE:
-            predict_dataset.features["pixel_values"] = datasets.Image()
-        predict_dataset.set_transform(preprocess_fn)
-
-    # Log a few random samples from the training set:
-    if training_args.do_train:
-        for index in random.sample(range(len(train_dataset)), 3):
-            logger.info(f"Sample {index} of the training set: {train_dataset[index]}.")
-
-    if training_args.do_eval:
-        for index in random.sample(range(len(eval_dataset)), 3):
-            logger.info(f"Sample {index} of the eval set: {eval_dataset[index]}.")
-
-    # Get the metric function
-    if data_args.task_name is not None:
-        metric = load_metric("glue", data_args.task_name)
-    else:
-        metric = load_metric("accuracy")
-
-    # You can define your custom compute_metrics function. It takes an `EvalPrediction` object (a namedtuple with a
-    # predictions and label_ids field) and has to return a dictionary string to float.
-    def compute_metrics(p: EvalPrediction):
-        preds = p.predictions[0] if isinstance(p.predictions, tuple) else p.predictions
-        preds = np.squeeze(preds) if is_regression else np.argmax(preds, axis=1)
-        if data_args.task_name is not None:
-            result = metric.compute(predictions=preds, references=p.label_ids)
-            if len(result) > 1:
-                result["combined_score"] = np.mean(list(result.values())).item()
-            return result
-        elif is_regression:
-            return {"mse": ((preds - p.label_ids) ** 2).mean().item()}
-        else:
-            return {"accuracy": (preds == p.label_ids).astype(np.float32).mean().item()}
-
-    # Initialize our Trainer
     trainer = PIXELTrainer(
         model=model,
         args=training_args,
-        train_dataset=train_dataset if training_args.do_train else None,
-        eval_dataset=eval_dataset if training_args.do_eval else None,
+        train_dataset=train_dataset,
+        eval_dataset=eval_dataset,
         compute_metrics=compute_metrics,
         tokenizer=processor,
-        data_collator=get_collator(training_args, processor, modality, is_regression=is_regression),
+        data_collator=data_collator,
         callbacks=[EarlyStoppingCallback(early_stopping_patience=training_args.early_stopping_patience)]
         if training_args.early_stopping
         else None,
     )
 
-    # Training
     if training_args.do_train:
-        checkpoint = None
-        if training_args.resume_from_checkpoint is not None:
-            checkpoint = training_args.resume_from_checkpoint
-        elif last_checkpoint is not None:
-            checkpoint = last_checkpoint
-        train_result = trainer.train(resume_from_checkpoint=checkpoint)
-        metrics = train_result.metrics
-        max_train_samples = (
-            data_args.max_train_samples if data_args.max_train_samples is not None else len(train_dataset)
-        )
-        metrics["train_samples"] = min(max_train_samples, len(train_dataset))
+        trainer.train()
+        trainer.save_model()
 
-        trainer.save_model()  # Saves the tokenizer too for easy upload
-
-        trainer.log_metrics("train", metrics)
-        trainer.save_metrics("train", metrics)
-        trainer.save_state()
-
-    # Evaluation
     if training_args.do_eval:
-        logger.info("*** Evaluate ***")
+        metrics = trainer.evaluate()
+        trainer.log_metrics("eval", metrics)
+        trainer.save_metrics("eval", metrics)
 
-        # Loop to handle MNLI double evaluation (matched, mis-matched)
-        tasks = [data_args.task_name]
-        eval_datasets = [eval_dataset]
-        eval_examples_l = [eval_examples]
-
-        if data_args.task_name == "mnli":
-            tasks.append("mnli-mm")
-            mismatched_eval_dataset = raw_datasets["validation_mismatched"]
-            mismatched_eval_examples = copy.deepcopy(mismatched_eval_dataset)
-            eval_examples_l.append(mismatched_eval_examples)
-            if modality == Modality.IMAGE:
-                mismatched_eval_dataset.features["pixel_values"] = datasets.Image()
-            mismatched_eval_dataset.set_transform(preprocess_fn)
-            eval_datasets.append(mismatched_eval_dataset)
-
-        for eval_dataset, eval_examples, task in zip(eval_datasets, eval_examples_l, tasks):
-            logger.info(f"Task name is {task}")
-            outputs = trainer.predict(test_dataset=eval_dataset, metric_key_prefix=f"eval_{task}")
-            metrics = outputs.metrics
-
-            # Log predictions
-            if training_args.log_predictions:
-                log_sequence_classification_predictions(
-                    training_args=training_args,
-                    features=eval_dataset,
-                    examples=eval_examples,
-                    predictions=outputs.predictions,
-                    sentence1_key=sentence1_key,
-                    sentence2_key=sentence2_key,
-                    modality=modality,
-                    prefix=task,
-                )
-
-            max_eval_samples = (
-                data_args.max_eval_samples if data_args.max_eval_samples is not None else len(eval_dataset)
-            )
-            metrics["eval_samples"] = min(max_eval_samples, len(eval_dataset))
-
-            trainer.log_metrics(f"eval_{task}", metrics)
-            trainer.save_metrics(f"eval_{task}", metrics)
-
-    if training_args.do_predict:
-        logger.info("*** Predict ***")
-
-        # Loop to handle MNLI double evaluation (matched, mismatched)
-        tasks = [data_args.task_name]
-        predict_datasets = [predict_dataset]
-        if data_args.task_name == "mnli":
-            tasks.append("mnli-mm")
-            mismatched_test_dataset = raw_datasets["test_mismatched"]
-            if modality == Modality.IMAGE:
-                mismatched_test_dataset.features["pixel_values"] = datasets.Image()
-            mismatched_test_dataset.set_transform(preprocess_fn)
-            predict_datasets.append(mismatched_test_dataset)
-
-        for predict_dataset, task in zip(predict_datasets, tasks):
-            # Removing the `label` columns because it contains -1 and Trainer won't like that.
-            predict_dataset = predict_dataset.remove_columns("label")
-            predictions = trainer.predict(predict_dataset, metric_key_prefix=f"predict_{task}").predictions
-            predictions = np.squeeze(predictions) if is_regression else np.argmax(predictions, axis=1)
-
-            output_predict_file = os.path.join(training_args.output_dir, f"predict_results_{task}.txt")
-            if trainer.is_world_process_zero():
-                with open(output_predict_file, "w") as writer:
-                    logger.info(f"***** Predict results {task} *****")
-                    writer.write("index\tprediction\n")
-                    for index, item in enumerate(predictions):
-                        if is_regression:
-                            writer.write(f"{index}\t{item:3.3f}\n")
-                        else:
-                            item = label_list[item]
-                            writer.write(f"{index}\t{item}\n")
-
-    kwargs = {"finetuned_from": model_args.model_name_or_path, "tasks": "text-classification"}
-    if data_args.task_name is not None:
-        kwargs["language"] = "en"
-        kwargs["dataset_tags"] = "glue"
-        kwargs["dataset_args"] = data_args.task_name
-        kwargs["dataset"] = f"GLUE {data_args.task_name.upper()}"
-
-    if training_args.push_to_hub:
-        trainer.push_to_hub(**kwargs)
-    else:
-        trainer.create_model_card(**kwargs)
+    if training_args.do_predict and test_dataset:
+        predictions = trainer.predict(test_dataset)
+        trainer.log_metrics("test", predictions.metrics)
+        trainer.save_metrics("test", predictions.metrics)
 
 
 def _mp_fn(index):

@@ -2,8 +2,6 @@
 export WANDB_PROJECT="pixel-experiments"
 
 # Settings
-export TREEBANK="UD_Arabic-PADT"
-export DATA_DIR="data/ud-treebanks-v2.10/${TREEBANK}"
 export FALLBACK_FONTS_DIR="data/fallback_fonts"  # let's say this is where we downloaded the fonts to
 export MODEL="Team-PIXEL/pixel-base" # also works with "bert-base-cased", "roberta-base", etc.
 export SEQ_LEN=256
@@ -11,14 +9,14 @@ export BSZ=64
 export GRAD_ACCUM=1
 export LR=5e-5
 export SEED=42
-export NUM_STEPS=15000
+export NUM_STEPS=20000
 
-export RUN_NAME="${TREEBANK}-$(basename ${MODEL})-${SEQ_LEN}-${BSZ}-${GRAD_ACCUM}-${LR}-${NUM_STEPS}-${SEED}"
+export RUN_NAME="$(basename ${MODEL})-${SEQ_LEN}-${BSZ}-${GRAD_ACCUM}-${LR}-${NUM_STEPS}-${SEED}"
 
-python scripts/training/run_pos.py \
+python scripts/training/run_readability.py \
   --model_name_or_path=${MODEL} \
+  --dataset_name=CAMeL-Lab/BAREC-Shared-Task-2025-sent \
   --remove_unused_columns=False \
-  --data_dir=${DATA_DIR} \
   --do_train \
   --do_eval \
   --do_predict \
@@ -32,22 +30,20 @@ python scripts/training/run_pos.py \
   --gradient_accumulation_steps=${GRAD_ACCUM} \
   --learning_rate=${LR} \
   --warmup_steps=100 \
-  --run_name=${RUN_NAME} \
-  --output_dir=${RUN_NAME} \
+  --run_name=arabic-readability-experiment \
+  --output_dir=runs/arabic-readability \
   --overwrite_output_dir \
   --overwrite_cache \
   --logging_strategy=steps \
-  --logging_steps=100 \
+  --logging_steps=1000 \
   --evaluation_strategy=steps \
-  --eval_steps=500 \
+  --eval_steps=2000 \
   --save_strategy=steps \
-  --save_steps=500 \
+  --save_steps=2000 \
   --save_total_limit=5 \
   --report_to=wandb \
   --log_predictions \
   --load_best_model_at_end=True \
-  --metric_for_best_model="eval_accuracy" \
-#   --fp16 \
-#   --half_precision_backend=apex \
-  --fallback_fonts_dir=${FALLBACK_FONTS_DIR} \
+  --metric_for_best_model=eval_accuracy \
+  --fallback_fonts_dir=data/fallback_fonts \
   --seed=${SEED}
