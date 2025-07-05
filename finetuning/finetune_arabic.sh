@@ -1,17 +1,17 @@
 # Optional wandb environment vars
-export WANDB_PROJECT="pixel-experiments"
+export WANDB_PROJECT="pixel-UD-Arabic-finetune"
 
 # Settings
 export TREEBANK="UD_Arabic-PADT"
 export DATA_DIR="data/ud-treebanks-v2.10/${TREEBANK}"
 export FALLBACK_FONTS_DIR="data/fallback_fonts"  # let's say this is where we downloaded the fonts to
-export MODEL="Team-PIXEL/pixel-base" # also works with "bert-base-cased", "roberta-base", etc.
+export MODEL="bensapir/pixel-barec-pretrain" # also works with "bert-base-cased", "roberta-base", etc.
 export SEQ_LEN=256
-export BSZ=64
+export BSZ=32
 export GRAD_ACCUM=1
 export LR=5e-5
 export SEED=42
-export NUM_STEPS=15000
+export NUM_STEPS=30000
 
 export RUN_NAME="${TREEBANK}-$(basename ${MODEL})-${SEQ_LEN}-${BSZ}-${GRAD_ACCUM}-${LR}-${NUM_STEPS}-${SEED}"
 
@@ -31,23 +31,23 @@ python scripts/training/run_pos.py \
   --per_device_train_batch_size=${BSZ} \
   --gradient_accumulation_steps=${GRAD_ACCUM} \
   --learning_rate=${LR} \
-  --warmup_steps=100 \
+  --warmup_steps=200 \
   --run_name=${RUN_NAME} \
   --output_dir=${RUN_NAME} \
   --overwrite_output_dir \
   --overwrite_cache \
   --logging_strategy=steps \
-  --logging_steps=100 \
+  --logging_steps=200 \
   --evaluation_strategy=steps \
-  --eval_steps=500 \
+  --eval_steps=1000 \
   --save_strategy=steps \
-  --save_steps=500 \
+  --save_steps=1000 \
   --save_total_limit=5 \
   --report_to=wandb \
   --log_predictions \
   --load_best_model_at_end=True \
   --metric_for_best_model="eval_accuracy" \
-#   --fp16 \
-#   --half_precision_backend=apex \
   --fallback_fonts_dir=${FALLBACK_FONTS_DIR} \
   --seed=${SEED}
+#   --fp16 \
+#   --half_precision_backend=apex \

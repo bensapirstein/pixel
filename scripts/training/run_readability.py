@@ -417,7 +417,12 @@ def main():
     )
 
     if training_args.do_train:
-        trainer.train()
+        checkpoint = None
+        if training_args.resume_from_checkpoint is not None:
+            checkpoint = training_args.resume_from_checkpoint
+        elif last_checkpoint is not None:
+            checkpoint = last_checkpoint
+        trainer.train(resume_from_checkpoint=checkpoint)
         trainer.save_model()
 
     if training_args.do_eval:
