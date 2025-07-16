@@ -61,6 +61,8 @@ from transformers.trainer_utils import get_last_checkpoint
 from transformers.utils import check_min_version
 from transformers.utils.versions import require_version
 
+from sklearn.metrics import accuracy_score, cohen_kappa_score, mean_absolute_error
+
 check_min_version("4.17.0")
 
 require_version("datasets>=1.8.0", "To fix: pip install ./datasets")
@@ -325,7 +327,9 @@ def get_dataset(
 
 def compute_metrics(p: EvalPrediction):
     preds = np.argmax(p.predictions, axis=1)
-    return {"accuracy": (preds == p.label_ids).astype(np.float32).mean().item()}
+    return {"accuracy": (preds == p.label_ids).astype(np.float32).mean().item(),
+            "QWK": cohen_kappa_score(p.label_ids, preds, weights='quadratic'),
+            "mae": np.mean(np.abs(preds - p.label_ids))}
 
 def main():
 
