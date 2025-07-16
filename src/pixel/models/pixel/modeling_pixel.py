@@ -1,4 +1,3 @@
-
 """
 PyTorch PIXEL models
 """
@@ -439,6 +438,172 @@ class PIXELForQuestionAnswering(ViTForImageClassification):
             end_logits=end_logits,
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
+        )
+
+
+class PIXELForDocumentClassification(ViTForImageClassification):
+    def __init__(self, config, pooling_mode: PoolingMode = PoolingMode.MEAN, add_layer_norm: bool = True):
+        super().__init__(config)
+
+        if not hasattr(self.config, "interpolate_pos_encoding"):
+            self.config.interpolate_pos_encoding = False
+
+        self.num_labels = config.num_labels
+
+        # Use the base ViT model for processing individual blocks
+        self.vit = ViTModel(config, add_pooling_layer=False)
+
+        # Document-level attention to combine block representations
+        self.block_attention = nn.MultiheadAttention(
+            embed_dim=config.hidden_size,
+            num_heads=config.num_attention_heads,
+            dropout=config.attention_probs_dropout_prob,
+            batch_first=True,
+        )
+
+        # Layer norm for block representations
+        self.block_layernorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+
+        # Pooler for individual blocks
+        self.block_pooler = PoolingForSequenceClassificationHead(
+            hidden_size=config.hidden_size,
+            hidden_dropout_prob=config.hidden_dropout_prob,
+            add_layer_norm=add_layer_norm,
+            pooling_mode=pooling_mode,
+        )
+
+        # Final classifier
+        self.classifier = nn.Linear(config.hidden_size, config.num_labels) if config.num_labels > 0 else nn.Identity()
+
+        # Dropout
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+
+        # Initialize weights and apply final processing
+        self.post_init()
+
+    def forward(
+        self,
+        pixel_values=None,  # List of tensors, one per block
+        attention_mask=None,  # List of attention masks, one per block
+        num_blocks=None,  # Tensor indicating number of blocks per document
+        head_mask=None,
+        labels=None,
+        output_attentions=None,
+        output_hidden_states=None,
+        interpolate_pos_encoding=None,
+        return_dict=None,
+    ):
+        r"""
+        pixel_values: List of tensors or packed tensor with shape indicators
+        attention_mask: List of attention masks corresponding to pixel_values
+        num_blocks: Tensor of shape (batch_size,) indicating number of blocks per document
+        """
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+
+        # Handle the case where inputs are lists (variable length documents)
+        if isinstance(pixel_values, list):
+            batch_size = len(pixel_values)
+            max_blocks = max(len(doc_blocks) for doc_blocks in pixel_values)
+
+            # Process each block through the ViT
+            all_block_representations = []
+            block_mask = torch.zeros(batch_size, max_blocks, device=self.device, dtype=torch.bool)
+
+            for doc_idx, (doc_pixel_values, doc_attention_masks) in enumerate(zip(pixel_values, attention_mask)):
+                doc_block_representations = []
+
+                for block_idx, (block_pixels, block_attention) in enumerate(zip(doc_pixel_values, doc_attention_masks)):
+                    # Process individual block
+                    block_outputs = self.vit(
+                        pixel_values=block_pixels.unsqueeze(0),  # Add batch dimension
+                        attention_mask=block_attention.unsqueeze(0),
+                        head_mask=head_mask,
+                        output_attentions=output_attentions,
+                        output_hidden_states=output_hidden_states,
+                        interpolate_pos_encoding=interpolate_pos_encoding
+                        if interpolate_pos_encoding is not None
+                        else self.config.interpolate_pos_encoding,
+                        return_dict=True,
+                    )
+
+                    # Pool the block representation (excluding CLS token)
+                    block_sequence_output = block_outputs.last_hidden_state[:, 1:, :]
+                    block_representation = self.block_pooler(block_sequence_output, block_attention.unsqueeze(0))
+                    doc_block_representations.append(block_representation.squeeze(0))
+
+                    # Update block mask
+                    block_mask[doc_idx, block_idx] = True
+
+                # Pad with zeros if necessary
+                while len(doc_block_representations) < max_blocks:
+                    doc_block_representations.append(
+                        torch.zeros_like(doc_block_representations[0])
+                    )
+
+                all_block_representations.append(torch.stack(doc_block_representations))
+
+            # Stack all document representations: (batch_size, max_blocks, hidden_size)
+            block_representations = torch.stack(all_block_representations)
+
+        else:
+            # Handle packed tensor format (if you implement batching differently)
+            raise NotImplementedError("Packed tensor format not implemented yet")
+
+        # Apply layer normalization to block representations
+        block_representations = self.block_layernorm(block_representations)
+
+        # Apply document-level attention to combine block representations
+        # block_mask: True for actual blocks, False for padding
+        document_representation, attention_weights = self.block_attention(
+            query=block_representations,
+            key=block_representations,
+            value=block_representations,
+            key_padding_mask=~block_mask,  # Invert mask for attention
+            need_weights=output_attentions,
+        )
+
+        # Pool document representation (mean over non-padded blocks)
+        document_lengths = block_mask.sum(dim=1, keepdim=True).float()  # (batch_size, 1)
+        document_representation = (document_representation * block_mask.unsqueeze(-1)).sum(dim=1) / document_lengths
+
+        # Apply dropout and classify
+        document_representation = self.dropout(document_representation)
+        logits = self.classifier(document_representation)
+
+        loss = None
+        if labels is not None:
+            if self.config.problem_type is None:
+                if self.num_labels == 1:
+                    self.config.problem_type = "regression"
+                elif self.num_labels > 1 and (labels.dtype == torch.long or labels.dtype == torch.int):
+                    self.config.problem_type = "single_label_classification"
+                else:
+                    self.config.problem_type = "multi_label_classification"
+
+            if self.config.problem_type == "regression":
+                loss_fct = MSELoss()
+                if self.num_labels == 1:
+                    loss = loss_fct(logits.squeeze(), labels.squeeze())
+                else:
+                    loss = loss_fct(logits, labels)
+            elif self.config.problem_type == "single_label_classification":
+                loss_fct = CrossEntropyLoss()
+                loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
+            elif self.config.problem_type == "multi_label_classification":
+                loss_fct = BCEWithLogitsLoss()
+                loss = loss_fct(logits, labels)
+
+        if not return_dict:
+            output = (logits,)
+            if output_attentions and attention_weights is not None:
+                output = output + (attention_weights,)
+            return ((loss,) + output) if loss is not None else output
+
+        return SequenceClassifierOutput(
+            loss=loss,
+            logits=logits,
+            hidden_states=None,  # Could implement if needed
+            attentions=attention_weights if output_attentions else None,
         )
 
 

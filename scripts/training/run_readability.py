@@ -272,7 +272,8 @@ def get_collator(
     training_args: argparse.Namespace,
     processor: Union[Union[PyGameTextRenderer, PangoCairoTextRenderer], PreTrainedTokenizerFast],
     modality: Modality,
-    is_regression: bool = False
+    is_regression: bool = False,
+    is_document: bool = False
 ):
     def image_collate_fn(examples):
         pixel_values = torch.stack([example["pixel_values"] for example in examples])
@@ -285,8 +286,40 @@ def get_collator(
             return {"pixel_values": pixel_values, "attention_mask": attention_mask, "labels": labels}
         return {"pixel_values": pixel_values, "attention_mask": attention_mask}
 
+    def document_collate_fn(examples):
+        """
+        Custom collate function for document-level data with variable number of blocks.
+        """
+        pixel_values = []
+        attention_masks = []
+        labels = []
+        num_blocks = []
+        
+        for example in examples:
+            pixel_values.append(example["pixel_values"])  # List of tensors
+            attention_masks.append(example["attention_mask"])  # List of tensors
+            labels.append(example["label"])
+            num_blocks.append(example["num_blocks"])
+        
+        batch = {
+            "pixel_values": pixel_values,  # List of lists of tensors
+            "attention_mask": attention_masks,  # List of lists of tensors
+            "num_blocks": torch.tensor(num_blocks, dtype=torch.long),
+        }
+        
+        if "label" in examples[0]:
+            if is_regression:
+                batch["labels"] = torch.FloatTensor(labels)
+            else:
+                batch["labels"] = torch.LongTensor(labels)
+        
+        return batch
+
     if modality == Modality.IMAGE:
-        collator = image_collate_fn
+        if is_document:
+            collator = document_collate_fn
+        else:
+            collator = image_collate_fn
     elif modality == Modality.TEXT:
         collator = DataCollatorWithPadding(processor, pad_to_multiple_of=8) if training_args.fp16 else None
     else:
@@ -300,6 +333,7 @@ def get_dataset(
     processor: Union[Union[PyGameTextRenderer, PangoCairoTextRenderer], PreTrainedTokenizerFast],
     modality: Modality,
     split: str,
+    is_document: bool = False
 ):
     kwargs = {}
     if modality == Modality.IMAGE:
@@ -323,6 +357,7 @@ def get_dataset(
         max_seq_length=data_args.max_seq_length,
         split=split,
         transforms=transforms,
+        is_document=is_document
     )
 
 def compute_metrics(p: EvalPrediction):
@@ -380,6 +415,11 @@ def main():
     # Set seed before initializing model.
     set_seed(training_args.seed)
 
+    if data_args.dataset_name.endswith("doc"):
+        is_document = True
+    else:
+        is_document = False
+
     # Labels
     num_labels = 19
     modality = Modality.IMAGE
@@ -388,24 +428,36 @@ def main():
     if modality == Modality.IMAGE and hasattr(processor, "max_seq_length"):
         processor.max_seq_length = data_args.max_seq_length
 
-    model = PIXELForSequenceClassification.from_pretrained(
-        model_args.model_name_or_path,
-        num_labels=num_labels,
-        pooling_mode=model_args.pooling_mode,
-        hidden_dropout_prob=model_args.dropout_prob,
-        attention_probs_dropout_prob=model_args.dropout_prob,
-    )
+    if is_document:
+        from pixel import PIXELForDocumentClassification
+        model = PIXELForDocumentClassification.from_pretrained(
+            model_args.model_name_or_path,
+            num_labels=num_labels,
+            pooling_mode=model_args.pooling_mode,
+            hidden_dropout_prob=model_args.dropout_prob,
+            attention_probs_dropout_prob=model_args.dropout_prob,
+        )
+    else:
+        is_document = False
+        model = PIXELForSequenceClassification.from_pretrained(
+            model_args.model_name_or_path,
+            num_labels=num_labels,
+            pooling_mode=model_args.pooling_mode,
+            hidden_dropout_prob=model_args.dropout_prob,
+            attention_probs_dropout_prob=model_args.dropout_prob,
+        )
 
     if modality == Modality.IMAGE:
         resize_model_embeddings(model, data_args.max_seq_length)
 
-    data_collator = default_data_collator
-    # data_collator = get_collator(training_args, processor, modality)
+
+    # data_collator = default_data_collator
+    data_collator = get_collator(training_args, processor, modality, is_document=is_document)
 
     # Load datasets
-    train_dataset = get_dataset(model.config, data_args, processor, modality, "train") if training_args.do_train else None
-    eval_dataset = get_dataset(model.config, data_args, processor, modality, "validation") if training_args.do_eval else None
-    test_dataset = get_dataset(model.config, data_args, processor, modality, "test") if data_args.test_file is not None else None
+    train_dataset = get_dataset(model.config, data_args, processor, modality, "train", is_document) if training_args.do_train else None
+    eval_dataset = get_dataset(model.config, data_args, processor, modality, "validation", is_document) if training_args.do_eval else None
+    test_dataset = get_dataset(model.config, data_args, processor, modality, "test", is_document) if data_args.test_file is not None else None
 
     trainer = PIXELTrainer(
         model=model,
