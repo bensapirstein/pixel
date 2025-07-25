@@ -11,6 +11,8 @@ from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast, is_torch_
 from ...utils import Modality, get_attention_mask
 from ..rendering import PyGameTextRenderer, PangoCairoTextRenderer
 
+from scripts.data.word import simple_word_detokenize
+
 logger = logging.getLogger(__name__)
 
 @dataclass
@@ -100,6 +102,7 @@ if is_torch_available():
             max_seq_length: int,
             split: str = "train",
             transforms: Optional[Callable] = None,
+            morphology = False,
         ):
             logger.info(f"Creating features from HuggingFace dataset (no cache)")
 
@@ -107,7 +110,7 @@ if is_torch_available():
 
             self.examples = [
                 BARECInputExample(
-                    sentence=ex["Sentence"],
+                    sentence=ex["Sentence"] if not morphology else simple_word_detokenize(hf_dataset[0]["morphological_analysis"]['d3tok_undiacritized']),
                     label=int(ex["Readability_Level_19"]) - 1
                 )
                 for ex in hf_dataset

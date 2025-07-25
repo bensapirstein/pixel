@@ -28,8 +28,6 @@ import datasets
 import numpy as np
 import torch
 import transformers
-from datasets import load_dataset
-from PIL import Image
 from pixel import (
     AutoConfig,
     AutoModelForSequenceClassification,
@@ -323,6 +321,7 @@ def get_dataset(
         max_seq_length=data_args.max_seq_length,
         split=split,
         transforms=transforms,
+        morphology=True,
     )
 
 def compute_metrics(p: EvalPrediction):
