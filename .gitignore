@@ -1,0 +1,14 @@
+
+*.pyc
+
+*.DS_Store
+
+/data/
+
+runs/
+
+src/pixel.egg-info/
+
+.idea/
+
+wandb/

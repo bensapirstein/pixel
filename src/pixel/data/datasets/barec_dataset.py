@@ -138,7 +138,7 @@ if is_torch_available():
 
             self.examples = [
                 BARECInputExample(
-                    sentence=ex["Sentence"] if not morphology else simple_word_detokenize(hf_dataset[0]["morphological_analysis"]['d3tok_undiacritized']),
+                    sentence=ex["Sentence"] if not morphology else ex["d3tok_undiacritized_detokenized"],
                     label=int(ex["Readability_Level_19"]) - 1 if not blind_test else None,
                     id= ex["ID"]
                 )

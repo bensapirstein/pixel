@@ -185,6 +185,7 @@ def create_final_dataset(processed_dataset: DatasetDict) -> DatasetDict:
                 'word_tokens': analysis['word_tokens'],
                 'd3tok_undiacritized': analysis['d3tok_undiacritized'],
                 'd3tok_diacritized': analysis['d3tok_diacritized'],
+                'd3tok_undiacritized_detokenized': simple_word_detokenize(analysis['d3tok_undiacritized']),
                 'lemmas': simplified_morph['lemmas'],
                 'pos_tags': simplified_morph['pos_tags'],
                 'roots': simplified_morph['roots'],
