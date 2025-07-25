@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 class BARECInputExample:
     sentence: str
     label: int  # 0-based readability level
+    id: int # Unique identifier for the example
 
 def _get_examples_to_features_fn(modality: Modality):
     if modality == Modality.IMAGE:
@@ -33,6 +34,8 @@ def convert_examples_to_image_features(
     max_seq_length: int,
     processor: Union[PyGameTextRenderer, PangoCairoTextRenderer],
     transforms: Optional[Callable] = None,
+    inference: bool = False,
+    blind_test: bool = False,
     **kwargs
 ) -> List[Dict[str, Union[int, torch.Tensor]]]:
     features = []
@@ -44,11 +47,28 @@ def convert_examples_to_image_features(
         pixel_values = transforms(Image.fromarray(image))
         attention_mask = get_attention_mask(num_patches, seq_length=max_seq_length)
 
-        features.append({
-            "pixel_values": pixel_values,
-            "attention_mask": torch.tensor(attention_mask, dtype=torch.long),
-            "label": example.label,
-        })
+        if blind_test:
+            # For blind test, we do not include the label
+            feature = {
+                "pixel_values": pixel_values,
+                "attention_mask": torch.tensor(attention_mask, dtype=torch.long),
+                "id": example.id
+            }
+            features.append(feature)
+        elif inference:
+            features.append({
+                "pixel_values": pixel_values,
+                "attention_mask": torch.tensor(attention_mask, dtype=torch.long),
+                "label": example.label,
+                "id": example.id
+            })
+        else:
+            feature = {
+                "pixel_values": pixel_values,
+                "attention_mask": torch.tensor(attention_mask, dtype=torch.long),
+                "label": example.label,
+            }
+            features.append(feature)
 
         if ex_index < 5:
             logger.info("*** Example ***")
@@ -62,6 +82,8 @@ def convert_examples_to_text_features(
     examples: List[BARECInputExample],
     max_seq_length: int,
     processor,
+    inference: bool = False,
+    blind_test: bool = False,
     **kwargs
 ) -> List[Dict[str, Union[int, torch.Tensor]]]:
     features = []
@@ -74,7 +96,10 @@ def convert_examples_to_text_features(
             return_tensors="pt",
         )
         feature = {k: v.squeeze(0) for k, v in encoding.items()}
-        feature["label"] = example.label
+        if not blind_test:
+            feature["label"] = example.label
+        if inference:
+            feature["id"] = example.id
         features.append(feature)
 
         if ex_index < 5:
@@ -101,17 +126,21 @@ if is_torch_available():
             modality: Modality,
             max_seq_length: int,
             split: str = "train",
+            inference: bool = False,
+            blind_test: bool = False,
+            token: str = None,
             transforms: Optional[Callable] = None,
             morphology = False,
         ):
             logger.info(f"Creating features from HuggingFace dataset (no cache)")
 
-            hf_dataset = load_dataset(dataset_name, split=split)
+            hf_dataset = load_dataset(dataset_name, split=split, token=token)
 
             self.examples = [
                 BARECInputExample(
                     sentence=ex["Sentence"] if not morphology else simple_word_detokenize(hf_dataset[0]["morphological_analysis"]['d3tok_undiacritized']),
-                    label=int(ex["Readability_Level_19"]) - 1
+                    label=int(ex["Readability_Level_19"]) - 1 if not blind_test else None,
+                    id= ex["ID"]
                 )
                 for ex in hf_dataset
             ]
@@ -121,6 +150,7 @@ if is_torch_available():
                 max_seq_length=max_seq_length,
                 processor=processor,
                 transforms=transforms,
+                inference=inference,
             )
 
         def __len__(self):
