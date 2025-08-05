@@ -3,12 +3,14 @@ export WANDB_PROJECT="pixel-readability-finetune"
 
 # Settings
 export FALLBACK_FONTS_DIR="data/fallback_fonts"  # let's say this is where we downloaded the fonts to
-export MODEL="bensapir/pixel-barec-pretrain" # also works with "bert-base-cased", "roberta-base", etc.
-export REPO="barec-finetune-open-sent"
+export MODEL="Team-PIXEL/pixel-base" # also works with "bert-base-cased", "roberta-base", etc.
+# export MODEL="bensapir/pixel-barec-pretrain" # also works with "bert-base-cased", "roberta-base", etc.
+# export REPO="pixel-base-finetune-sent"
+export REPO="pixel-base-finetune-d3tok-space-sent"
 export SEQ_LEN=256
 export BSZ=32
 export GRAD_ACCUM=1
-export LR=5e-5
+export LR=2.5e-05
 export SEED=42
 export NUM_STEPS=50000
 export NUM_EPOCHS=40
@@ -17,7 +19,7 @@ export RUN_NAME="$(basename ${MODEL})-${SEQ_LEN}-${BSZ}-${GRAD_ACCUM}-${LR}-${NU
 
 python scripts/training/run_readability.py \
   --model_name_or_path=${MODEL} \
-  --dataset_name="CAMeL-Lab/BAREC-Shared-Task-2025-sent" \
+  --dataset_name="bensapir/BAREC-Shared-Task-2025-sent-morphological" \
   --remove_unused_columns=False \
   --do_train \
   --do_eval \
@@ -32,7 +34,6 @@ python scripts/training/run_readability.py \
   --warmup_steps=200 \
   --run_name="${RUN_NAME}" \
   --output_dir="runs/"${REPO} \
-  --push_to_hub \
   --overwrite_cache \
   --text_renderer_name_or_path="configs/renderers/noto_renderer" \
   --logging_strategy=steps \
@@ -44,10 +45,11 @@ python scripts/training/run_readability.py \
   --save_total_limit=5 \
   --report_to=wandb \
   --log_predictions \
-  --load_best_model_at_end=True \
-  --metric_for_best_model="eval_accuracy" \
+  --metric_for_best_model="eval_QWK" \
   --fallback_fonts_dir=data/fallback_fonts \
   --seed=${SEED} \
-  --early_stopping_patience=20
-#   --overwrite_output_dir \
-#   --early_stopping \
+  --overwrite_output_dir \
+  --early_stopping=False \
+  --load_best_model_at_end=True \
+#   --push_to_hub \
+#   --early_stopping_patience=20 \

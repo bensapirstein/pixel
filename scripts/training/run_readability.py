@@ -322,11 +322,14 @@ def get_dataset(
         split=split,
         transforms=transforms,
         morphology=True,
+        replacement_char=" ",
+        char_count=1
     )
 
 def compute_metrics(p: EvalPrediction):
     preds = np.argmax(p.predictions, axis=1)
     return {"accuracy": (preds == p.label_ids).astype(np.float32).mean().item(),
+            "accuracy_margin_1": np.mean(np.abs(preds - p.label_ids) <= 1),
             "QWK": cohen_kappa_score(p.label_ids, preds, weights='quadratic'),
             "mae": np.mean(np.abs(preds - p.label_ids))}
 

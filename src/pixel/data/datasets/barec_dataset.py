@@ -11,8 +11,6 @@ from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast, is_torch_
 from ...utils import Modality, get_attention_mask
 from ..rendering import PyGameTextRenderer, PangoCairoTextRenderer
 
-from scripts.data.word import simple_word_detokenize
-
 logger = logging.getLogger(__name__)
 
 @dataclass
@@ -131,6 +129,8 @@ if is_torch_available():
             token: str = None,
             transforms: Optional[Callable] = None,
             morphology = False,
+            replacement_char: Optional[str] = None,  # Changed from use_tatweel
+            char_count: int = 3,  # Changed from tatweel_count
         ):
             logger.info(f"Creating features from HuggingFace dataset (no cache)")
 
@@ -138,7 +138,11 @@ if is_torch_available():
 
             self.examples = [
                 BARECInputExample(
-                    sentence=ex["Sentence"] if not morphology else ex["d3tok_undiacritized_detokenized"],
+                    sentence=self._process_sentence(
+                        ex["Sentence"] if not morphology else ex["morphological_analysis"]["d3tok_undiacritized_detokenized"],
+                        replacement_char,
+                        char_count
+                    ),
                     label=int(ex["Readability_Level_19"]) - 1 if not blind_test else None,
                     id= ex["ID"]
                 )
@@ -152,6 +156,30 @@ if is_torch_available():
                 transforms=transforms,
                 inference=inference,
             )
+
+        def _process_sentence(self, sentence: str, replacement_char: Optional[str] = None, char_count: int = 3) -> str:
+            """
+            Process the sentence by optionally replacing '+_' or '_+' with specified characters.
+            
+            Args:
+                sentence: The input sentence
+                replacement_char: Character to use for replacement (e.g., tatweel, space, etc.). 
+                                 If None, no replacement is performed.
+                char_count: Number of characters to use for replacement
+                
+            Returns:
+                Processed sentence
+            """
+            if replacement_char is None:
+                return sentence
+                
+            # Create the replacement string by repeating the character
+            replacement_string = replacement_char * char_count
+            
+            # Replace both '+_' and '_+' patterns
+            processed_sentence = sentence.replace('+_', replacement_string).replace('_+', replacement_string)
+            
+            return processed_sentence
 
         def __len__(self):
             return len(self.features)
