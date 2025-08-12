@@ -8,8 +8,13 @@ import torch
 from PIL import Image
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast, is_torch_available
 
+from scripts.data.experiment_configs import get_processing_config
+
 from ...utils import Modality, get_attention_mask
 from ..rendering import PyGameTextRenderer, PangoCairoTextRenderer
+
+# Import the new Arabic sentence processor
+from scripts.data.arabic_sentence_processor import ArabicSentenceProcessor, ProcessingConfig
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +124,7 @@ if is_torch_available():
 
         def __init__(
             self,
-            dataset_name,  # HuggingFace datasets.Dataset object
+            dataset_name,
             processor: Union[PyGameTextRenderer, PangoCairoTextRenderer, Callable],
             modality: Modality,
             max_seq_length: int,
@@ -128,21 +133,23 @@ if is_torch_available():
             blind_test: bool = False,
             token: str = None,
             transforms: Optional[Callable] = None,
-            morphology = False,
-            replacement_char: Optional[str] = None,  # Changed from use_tatweel
-            char_count: int = 3,  # Changed from tatweel_count
+            processing_config_name: Optional[str] = None,
         ):
             logger.info(f"Creating features from HuggingFace dataset (no cache)")
 
             hf_dataset = load_dataset(dataset_name, split=split, token=token)
 
+            # Initialize Arabic sentence processor if config is provided
+            self.arabic_processor = None
+            if processing_config_name is not None:
+                self.arabic_processor = ArabicSentenceProcessor(get_processing_config(processing_config_name))
+                logger.info(f"Initialized Arabic sentence processor with config: {processing_config_name}")
+            else:
+                self.arabic_processor = ArabicSentenceProcessor(ProcessingConfig())
+
             self.examples = [
                 BARECInputExample(
-                    sentence=self._process_sentence(
-                        ex["Sentence"] if not morphology else ex["morphological_analysis"]["d3tok_undiacritized_detokenized"],
-                        replacement_char,
-                        char_count
-                    ),
+                    sentence=self.arabic_processor.process(ex["Sentence"]),
                     label=int(ex["Readability_Level_19"]) - 1 if not blind_test else None,
                     id= ex["ID"]
                 )
@@ -156,30 +163,7 @@ if is_torch_available():
                 transforms=transforms,
                 inference=inference,
             )
-
-        def _process_sentence(self, sentence: str, replacement_char: Optional[str] = None, char_count: int = 3) -> str:
-            """
-            Process the sentence by optionally replacing '+_' or '_+' with specified characters.
-            
-            Args:
-                sentence: The input sentence
-                replacement_char: Character to use for replacement (e.g., tatweel, space, etc.). 
-                                 If None, no replacement is performed.
-                char_count: Number of characters to use for replacement
-                
-            Returns:
-                Processed sentence
-            """
-            if replacement_char is None:
-                return sentence
-                
-            # Create the replacement string by repeating the character
-            replacement_string = replacement_char * char_count
-            
-            # Replace both '+_' and '_+' patterns
-            processed_sentence = sentence.replace('+_', replacement_string).replace('_+', replacement_string)
-            
-            return processed_sentence
+            pass
 
         def __len__(self):
             return len(self.features)

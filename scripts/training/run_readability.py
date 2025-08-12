@@ -22,7 +22,7 @@ import os
 import random
 import sys
 from dataclasses import dataclass, field
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, Union, Dict, Any
 
 import datasets
 import numpy as np
@@ -83,6 +83,13 @@ class DataTrainingArguments:
     )
     dataset_config_name: Optional[str] = field(
         default=None, metadata={"help": "The configuration name of the dataset to use (via the datasets library)."}
+    )
+    processing_config_name: Optional[str] = field(
+        default=None, 
+        metadata={
+            "help": "Name of the Arabic processing configuration to use. "
+                   "Available options can be found in experiment_configs.py"
+        }
     )
     max_seq_length: Optional[int] = field(
         default=196,
@@ -321,9 +328,7 @@ def get_dataset(
         max_seq_length=data_args.max_seq_length,
         split=split,
         transforms=transforms,
-        morphology=True,
-        replacement_char=" ",
-        char_count=1
+        processing_config_name=data_args.processing_config_name,
     )
 
 def compute_metrics(p: EvalPrediction):
@@ -333,15 +338,18 @@ def compute_metrics(p: EvalPrediction):
             "QWK": cohen_kappa_score(p.label_ids, preds, weights='quadratic'),
             "mae": np.mean(np.abs(preds - p.label_ids))}
 
-def main():
+def main(config_dict: Dict[str, Any] = None):
 
     parser = HfArgumentParser((ModelArguments, DataTrainingArguments, PIXELTrainingArguments))
-    if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
-        # If we pass only one argument to the script and it's the path to a json file,
-        # let's parse it to get our arguments.
-        model_args, data_args, training_args = parser.parse_json_file(json_file=os.path.abspath(sys.argv[1]))
+    if not config_dict:
+        if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
+            # If we pass only one argument to the script and it's the path to a json file,
+            # let's parse it to get our arguments.
+            model_args, data_args, training_args = parser.parse_json_file(json_file=os.path.abspath(sys.argv[1]))
+        else:
+            model_args, data_args, training_args = parser.parse_args_into_dataclasses()
     else:
-        model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+        model_args, data_args, training_args = parser.parse_dict(config_dict)
 
     # Setup logging
     log_level = logging.INFO
