@@ -65,8 +65,7 @@ class ProcessingConfig:
     # Morphological processing
     morphological_scheme: MorphologicalScheme = MorphologicalScheme.WORD
     morphological_split: bool = False  # Whether to split morphological tokens
-    morphological_diac: bool = False  # Whether to use diacritics in morphological tokens
-    
+
     # Encoding scheme for morphological boundaries
     encoding_scheme: EncodingScheme = EncodingScheme.DEFAULT
     replacement_char: str = " "  # Character to use for replacement
@@ -103,7 +102,7 @@ class ArabicSentenceProcessor:
                     self.mle,
                     scheme='d3tok',
                     split=self.config.morphological_split,
-                    diac=self.config.morphological_diac
+                    diac=self.config.diacritic_format == DiacriticFormat.DIACRITIZED,
                 )
     
     def process(self, sentence: str) -> str:
