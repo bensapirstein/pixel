@@ -1,10 +1,9 @@
-from scripts.data.arabic_sentence_processor import (
+from ..processing.arabic_sentence_processor import (
     ProcessingConfig,
     OrthographicFormat,
     DiacriticFormat,
     MorphologicalScheme,
     EncodingScheme,
-ArabicSentenceProcessor
 )
 
 # Base configuration with common settings
@@ -15,7 +14,7 @@ BASE_CONFIG = {
 # Complete Orthographic Experiment Configurations (3×2×2 = 12 configs)
 ORTHOGRAPHIC_CONFIGS = {
     # Arabic Script Configurations (4 configs)
-    "arabic_nonorm_original": ProcessingConfig(
+    "arabic_default": ProcessingConfig(
         unicode_normalize=True,
         orthographic_normalize=False,
         orthographic_format=OrthographicFormat.ARABIC,
@@ -35,7 +34,7 @@ ORTHOGRAPHIC_CONFIGS = {
     ),
 
     # Buckwalter Script Configurations (3 configs)
-    "buckwalter_nonorm_original": ProcessingConfig(
+    "buckwalter_default": ProcessingConfig(
         unicode_normalize=True,
         orthographic_normalize=False,
         orthographic_format=OrthographicFormat.BUCKWALTER,
@@ -55,7 +54,7 @@ ORTHOGRAPHIC_CONFIGS = {
     ),
 
     # HSB Script Configurations (4 configs)
-    "hsb_nonorm_original": ProcessingConfig(
+    "hsb_default": ProcessingConfig(
         unicode_normalize=True,
         orthographic_normalize=False,
         orthographic_format=OrthographicFormat.HSB,

@@ -15,7 +15,7 @@ from camel_tools.utils.dediac import dediac_ar
 from camel_tools.tokenizers.word import simple_word_tokenize
 from camel_tools.disambig.mle import MLEDisambiguator
 from camel_tools.tokenizers.morphological import MorphologicalTokenizer
-from scripts.data.word import simple_word_detokenize
+from ..processing.word import simple_word_detokenize
 
 logger = logging.getLogger(__name__)
 

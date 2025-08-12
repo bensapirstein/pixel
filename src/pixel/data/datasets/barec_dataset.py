@@ -8,13 +8,12 @@ import torch
 from PIL import Image
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast, is_torch_available
 
-from scripts.data.experiment_configs import get_processing_config
+from ..processing.experiment_configs import get_processing_config
 
 from ...utils import Modality, get_attention_mask
 from ..rendering import PyGameTextRenderer, PangoCairoTextRenderer
 
-# Import the new Arabic sentence processor
-from scripts.data.arabic_sentence_processor import ArabicSentenceProcessor, ProcessingConfig
+from ..processing.arabic_sentence_processor import ArabicSentenceProcessor, ProcessingConfig
 
 logger = logging.getLogger(__name__)
 
