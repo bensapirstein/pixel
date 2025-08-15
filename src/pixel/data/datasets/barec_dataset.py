@@ -3,6 +3,7 @@ import logging
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Union
 from datasets import load_dataset
+from tqdm import tqdm
 
 import torch
 from PIL import Image
@@ -144,6 +145,7 @@ if is_torch_available():
                 self.arabic_processor = ArabicSentenceProcessor(get_processing_config(processing_config_name))
                 logger.info(f"Initialized Arabic sentence processor with config: {processing_config_name}")
             else:
+                logger.warning("No processing config provided, using default Arabic sentence processor.")
                 self.arabic_processor = ArabicSentenceProcessor(ProcessingConfig())
 
             self.examples = [
@@ -152,7 +154,7 @@ if is_torch_available():
                     label=int(ex["Readability_Level_19"]) - 1 if not blind_test else None,
                     id= ex["ID"]
                 )
-                for ex in hf_dataset
+                for ex in tqdm(hf_dataset)
             ]
             examples_to_features_fn = _get_examples_to_features_fn(modality)
             self.features = examples_to_features_fn(

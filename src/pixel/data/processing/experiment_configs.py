@@ -13,60 +13,68 @@ BASE_CONFIG = {
 
 # Complete Orthographic Experiment Configurations (3×2×2 = 12 configs)
 ORTHOGRAPHIC_CONFIGS = {
-    # Arabic Script Configurations (4 configs)
-    "arabic_default": ProcessingConfig(
+    "no-unicode-normalize": ProcessingConfig(
+        unicode_normalize=False,
+        orthographic_normalize=False,
+        orthographic_format=OrthographicFormat.ARABIC,
+        diacritic_format=DiacriticFormat.ORIGINAL
+    ),
+
+    "arabic-nonorm-diac": ProcessingConfig( # This has maximal disambiguity
+        unicode_normalize=True,
+        orthographic_normalize=False,
+        orthographic_format=OrthographicFormat.ARABIC,
+        diacritic_format=DiacriticFormat.DIACRITIZED
+    ),
+
+    # Arabic Script Configurations (3 configs)
+    "arabic-default": ProcessingConfig(
         unicode_normalize=True,
         orthographic_normalize=False,
         orthographic_format=OrthographicFormat.ARABIC,
         diacritic_format=DiacriticFormat.ORIGINAL
     ),
-    "arabic_norm_dediac": ProcessingConfig( # This is the common practice
+    "arabic-norm-dediac": ProcessingConfig( # This is the common practice
         unicode_normalize=True,
         orthographic_normalize=True,
         orthographic_format=OrthographicFormat.ARABIC,
         diacritic_format=DiacriticFormat.DEDIACRITIZED
-    ),
-    "arabic_nonorm_diac": ProcessingConfig( # This has maximal disambiguity
-        unicode_normalize=True,
-        orthographic_normalize=False,
-        orthographic_format=OrthographicFormat.ARABIC,
-        diacritic_format=DiacriticFormat.DIACRITIZED
     ),
 
     # Buckwalter Script Configurations (3 configs)
-    "buckwalter_default": ProcessingConfig(
+    "buckwalter-default": ProcessingConfig(
         unicode_normalize=True,
         orthographic_normalize=False,
         orthographic_format=OrthographicFormat.BUCKWALTER,
         diacritic_format=DiacriticFormat.ORIGINAL
     ),
-    "buckwalter_norm_dediac": ProcessingConfig(
+    "buckwalter-norm-dediac": ProcessingConfig(
         unicode_normalize=True,
         orthographic_normalize=True,
         orthographic_format=OrthographicFormat.BUCKWALTER,
         diacritic_format=DiacriticFormat.DEDIACRITIZED
     ),
-    "buckwalter_nonorm_diac": ProcessingConfig(
+    "buckwalter-nonorm-diac": ProcessingConfig(
         unicode_normalize=True,
         orthographic_normalize=False,
         orthographic_format=OrthographicFormat.BUCKWALTER,
         diacritic_format=DiacriticFormat.DIACRITIZED
     ),
 
-    # HSB Script Configurations (4 configs)
-    "hsb_default": ProcessingConfig(
+    # HSB Script Configurations (3 configs)
+    "hsb-default": ProcessingConfig(
         unicode_normalize=True,
         orthographic_normalize=False,
         orthographic_format=OrthographicFormat.HSB,
         diacritic_format=DiacriticFormat.ORIGINAL
     ),
-    "hsb_nonorm_diac": ProcessingConfig(
+    "hsb-nonorm-diac": ProcessingConfig(
         unicode_normalize=True,
         orthographic_normalize=False,
         orthographic_format=OrthographicFormat.HSB,
         diacritic_format=DiacriticFormat.DIACRITIZED
     ),
-    "hsb_norm_dediac": ProcessingConfig(
+    "hsb-norm-dediac": ProcessingConfig(
         unicode_normalize=True,
         orthographic_normalize=True,
         orthographic_format=OrthographicFormat.HSB,
@@ -84,29 +92,29 @@ best_orthographic_config = {
 # Morphological Experiment Configurations (4×4 = 16 configs)
 MORPHOLOGICAL_CONFIGS = {
     # Word-level (baseline) configurations
-    "morph_word": ProcessingConfig(
+    "morph-word": ProcessingConfig(
         **best_orthographic_config,
         morphological_scheme=MorphologicalScheme.WORD
     ),
-    "morph_lex": ProcessingConfig(
+    "morph-lex": ProcessingConfig(
         **best_orthographic_config,
         morphological_scheme=MorphologicalScheme.LEX
     ),
     
     # Lemmatization (LEX) configurations
-    "morph_d3tok_default": ProcessingConfig(
+    "morph-d3tok-default": ProcessingConfig(
         **best_orthographic_config,
         morphological_scheme=MorphologicalScheme.D3TOK,
         encoding_scheme=EncodingScheme.DEFAULT
     ),
-    "morph_d3tok_tatweel": ProcessingConfig(
+    "morph-d3tok-tatweel": ProcessingConfig(
         **best_orthographic_config,
         morphological_scheme=MorphologicalScheme.D3TOK,
         encoding_scheme=EncodingScheme.TATWEEL
     ),
     
     # D3TOK configurations with different encoding schemes
-    "morph_d3tok_space": ProcessingConfig(
+    "morph-d3tok-space": ProcessingConfig(
         **best_orthographic_config,
         morphological_scheme=MorphologicalScheme.D3TOK,
         encoding_scheme=EncodingScheme.SPACE

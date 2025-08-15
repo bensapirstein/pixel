@@ -1,5 +1,5 @@
 # Optional wandb environment vars
-export WANDB_PROJECT="pixel-readability-finetune"
+export WANDB_PROJECT="pixel-readability-orthography-experiments"
 
 # Settings
 export FALLBACK_FONTS_DIR="data/fallback_fonts"  # let's say this is where we downloaded the fonts to
@@ -8,18 +8,19 @@ export MODEL="Team-PIXEL/pixel-base" # also works with "bert-base-cased", "rober
 # export REPO="pixel-base-finetune-sent"
 export REPO="pixel-base-finetune-d3tok-space-sent"
 export SEQ_LEN=256
-export BSZ=32
+export BSZ=64
 export GRAD_ACCUM=1
-export LR=2.5e-05
+export LR=5e-05
 export SEED=42
-export NUM_STEPS=50000
+export NUM_STEPS=25000
 export NUM_EPOCHS=40
+export MODE="${MODE:-arabic-default}"  # default if not set
 
-export RUN_NAME="$(basename ${MODEL})-${SEQ_LEN}-${BSZ}-${GRAD_ACCUM}-${LR}-${NUM_STEPS}-${SEED}"
-
+export RUN_NAME="$(basename ${MODEL})-${MODE}-${SEQ_LEN}-${BSZ}-${GRAD_ACCUM}-${LR}-${NUM_STEPS}-${SEED}"
 python scripts/training/run_readability.py \
   --model_name_or_path=${MODEL} \
-  --dataset_name="bensapir/BAREC-Shared-Task-2025-sent-morphological" \
+  --dataset_name="CAMeL-Lab/BAREC-Shared-Task-2025-sent" \
+  --processing_config_name=${MODE} \
   --remove_unused_columns=False \
   --do_train \
   --do_eval \
@@ -31,18 +32,18 @@ python scripts/training/run_readability.py \
   --per_device_train_batch_size=${BSZ} \
   --gradient_accumulation_steps=${GRAD_ACCUM} \
   --learning_rate=${LR} \
-  --warmup_steps=200 \
+  --warmup_steps=100 \
   --run_name="${RUN_NAME}" \
-  --output_dir="runs/"${REPO} \
+  --output_dir="runs/${RUN_NAME}" \
   --overwrite_cache \
   --text_renderer_name_or_path="configs/renderers/noto_renderer" \
   --logging_strategy=steps \
-  --logging_steps=200 \
+  --logging_steps=100 \
   --evaluation_strategy=steps \
-  --eval_steps=1000 \
+  --eval_steps=500 \
   --save_strategy=steps \
-  --save_steps=1000 \
-  --save_total_limit=5 \
+  --save_steps=500 \
+  --save_total_limit=3 \
   --report_to=wandb \
   --log_predictions \
   --metric_for_best_model="eval_QWK" \

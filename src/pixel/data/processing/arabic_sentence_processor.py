@@ -174,14 +174,14 @@ class ArabicSentenceProcessor:
         """Apply diacritization using disambiguator"""
         word_tokens = simple_word_tokenize(sentence)
         disambig = self.mle.disambiguate(word_tokens)
-        diacritized_words = [d.analyses[0].analysis['diac'] for d in disambig]
-        return ' '.join(diacritized_words)
+        diacritized_words = [d.analyses[0].analysis['diac'] if len(d.analyses) > 0 else d.word for d in disambig]
+        return simple_word_detokenize(diacritized_words)
     
     def _apply_lemmatization(self, word_tokens: List[str]) -> str:
         """Replace words with their lemmas"""
         disambig = self.mle.disambiguate(word_tokens)
-        lemmas = [d.analyses[0].analysis['lex'] for d in disambig]
-        return ' '.join(lemmas)
+        lemmas = [d.analyses[0].analysis['lex'] if len(d.analyses) > 0 else d.word for d in disambig]
+        return simple_word_detokenize(lemmas)
     
     def _apply_morphological_tokenization(self, word_tokens: List[str]) -> str:
         """Apply morphological tokenization"""

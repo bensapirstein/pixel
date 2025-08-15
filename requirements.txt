@@ -16,3 +16,4 @@ submitit
 transformers==4.17.0
 wandb
 seaborn
+camel-tools 
