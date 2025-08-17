@@ -19,12 +19,11 @@ ORTHOGRAPHIC_CONFIGS = {
         orthographic_format=OrthographicFormat.ARABIC,
         diacritic_format=DiacriticFormat.ORIGINAL
     ),
-
-    "arabic-nonorm-diac": ProcessingConfig( # This has maximal disambiguity
+    "arabic-isolated": ProcessingConfig(
         unicode_normalize=True,
         orthographic_normalize=False,
-        orthographic_format=OrthographicFormat.ARABIC,
-        diacritic_format=DiacriticFormat.DIACRITIZED
+        orthographic_format=OrthographicFormat.ARABIC_ISOLATED,
+        diacritic_format=DiacriticFormat.ORIGINAL
     ),
 
     # Arabic Script Configurations (3 configs)
@@ -39,6 +38,12 @@ ORTHOGRAPHIC_CONFIGS = {
         orthographic_normalize=True,
         orthographic_format=OrthographicFormat.ARABIC,
         diacritic_format=DiacriticFormat.DEDIACRITIZED
+    ),
+    "arabic-nonorm-diac": ProcessingConfig(  # This has maximal disambiguity
+        unicode_normalize=True,
+        orthographic_normalize=False,
+        orthographic_format=OrthographicFormat.ARABIC,
+        diacritic_format=DiacriticFormat.DIACRITIZED
     ),
 
     # Buckwalter Script Configurations (3 configs)

@@ -26,6 +26,7 @@ TATWEEL_MAP = CharMapper({
 class OrthographicFormat(Enum):
     """Orthographic format options"""
     ARABIC = "arabic"
+    ARABIC_ISOLATED = "arabic-isolated"
     BUCKWALTER = "buckwalter"
     HSB = "hsb"  # Habash-Soudi-Buckwalter
 
@@ -89,6 +90,8 @@ class ArabicSentenceProcessor:
         elif self.config.orthographic_format == OrthographicFormat.HSB:
             self.ar2transliteration = CharMapper.builtin_mapper('ar2hsb')
             self.transliteration2ar = CharMapper.builtin_mapper('hsb2ar')
+        elif self.config.orthographic_format == OrthographicFormat.ARABIC_ISOLATED:
+            self.ar2transliteration = CharMapper.mapper_from_json('configs/charmaps/ar2isol.json')
         
         # Morphological tools
         if (self.config.diacritic_format == DiacriticFormat.DIACRITIZED or 
