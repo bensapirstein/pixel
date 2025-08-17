@@ -427,6 +427,10 @@ class TextRenderingMixin(PushToHubMixin):
             fallback_fonts_dir = kwargs.pop("fallback_fonts_dir")
             text_renderer_dict.update({"fallback_fonts_dir": fallback_fonts_dir})
 
+        if "font_features" in kwargs:
+            font_features = kwargs.pop("font_features")
+            text_renderer_dict.update({"font_features": font_features})
+
         text_renderer = cls(**text_renderer_dict)
 
         # Update text_renderer with kwargs if needed

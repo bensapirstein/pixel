@@ -54,6 +54,11 @@ class PangoCairoTextRenderer(TextRenderingMixin):
         fallback_fonts_dir (`str`, *optional*, defaults to None):
             Path to a directory containing font files (.ttf or .otf) which will be registered as fallback fonts. This
             can be useful when working with datasets with a large Unicode range
+        font_features (`str`, *optional*, defaults to None):
+            A string specifying font features to be applied when rendering text, such as "kern" for kerning or
+            "liga" for ligatures. Features are specified as a space-separated list of feature tags. Not all fonts
+            support all features, and the availability of features depends on the font file and the rendering engine
+            used.
 
     """
 
@@ -71,6 +76,7 @@ class PangoCairoTextRenderer(TextRenderingMixin):
         pixels_per_patch: int = DEFAULT_PPB,
         max_seq_length: int = MAX_SEQ_LENGTH,
         fallback_fonts_dir: Optional[str] = None,
+        font_features: Optional[str] = None,  # NEW PARAMETER
         **kwargs,
     ):
 
@@ -92,6 +98,7 @@ class PangoCairoTextRenderer(TextRenderingMixin):
         self.font = None
         self.fonts_list = None
         self.fallback_fonts_dir = fallback_fonts_dir
+        self.font_features = font_features
         self.load_font()
 
         self.PANGO_SCALE = 1024
@@ -155,6 +162,7 @@ class PangoCairoTextRenderer(TextRenderingMixin):
             "pixels_per_patch": self.pixels_per_patch,
             "max_seq_length": self.max_seq_length,
             "fonts_list": self.fonts_list,
+            "font_features": self.font_features,  # ADD THIS LINE
         }
 
     def __setstate__(self, state_dict: Dict[str, Any]) -> None:
@@ -1177,6 +1185,11 @@ class PangoCairoTextRenderer(TextRenderingMixin):
 
         scaled_font_size = (self.dpi / 72) * self.font_size
         font_str = f"{font_family_name} {scaled_font_size}px"
+        
+        # Add font features if specified
+        if self.font_features:
+            font_str += f" #{self.font_features}"
+        
         self.font = Pango.font_description_from_string(font_str)
 
     def get_text_width(self, text: str) -> int:
