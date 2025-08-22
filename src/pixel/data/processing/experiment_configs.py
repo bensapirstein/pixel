@@ -33,6 +33,21 @@ ORTHOGRAPHIC_CONFIGS = {
         orthographic_format=OrthographicFormat.ARABIC,
         diacritic_format=DiacriticFormat.ORIGINAL
     ),
+
+    "arabic-dediac": ProcessingConfig(
+        unicode_normalize=True,
+        orthographic_normalize=False,
+        orthographic_format=OrthographicFormat.ARABIC,
+        diacritic_format=DiacriticFormat.DEDIACRITIZED
+    ),
+
+    "arabic-norm": ProcessingConfig(
+        unicode_normalize=True,
+        orthographic_normalize=True,
+        orthographic_format=OrthographicFormat.ARABIC,
+        diacritic_format=DiacriticFormat.ORIGINAL
+    ),
+
     "arabic-norm-dediac": ProcessingConfig( # This is the common practice
         unicode_normalize=True,
         orthographic_normalize=True,
@@ -87,7 +102,7 @@ ORTHOGRAPHIC_CONFIGS = {
     )
 }
 
-best_orthographic_config = {
+default_orthographic_config = {
     "unicode_normalize": True,
     "orthographic_normalize": False,
     "orthographic_format": OrthographicFormat.ARABIC,
@@ -98,29 +113,43 @@ best_orthographic_config = {
 MORPHOLOGICAL_CONFIGS = {
     # Word-level (baseline) configurations
     "morph-word": ProcessingConfig(
-        **best_orthographic_config,
+        **default_orthographic_config,
         morphological_scheme=MorphologicalScheme.WORD
     ),
     "morph-lex": ProcessingConfig(
-        **best_orthographic_config,
+        **default_orthographic_config,
         morphological_scheme=MorphologicalScheme.LEX
     ),
     
     # Lemmatization (LEX) configurations
     "morph-d3tok-default": ProcessingConfig(
-        **best_orthographic_config,
+        **default_orthographic_config,
         morphological_scheme=MorphologicalScheme.D3TOK,
         encoding_scheme=EncodingScheme.DEFAULT
     ),
     "morph-d3tok-tatweel": ProcessingConfig(
-        **best_orthographic_config,
+        **default_orthographic_config,
         morphological_scheme=MorphologicalScheme.D3TOK,
         encoding_scheme=EncodingScheme.TATWEEL
     ),
     
+    "morph-d3tok-tatweel2": ProcessingConfig(
+        **default_orthographic_config,
+        morphological_scheme=MorphologicalScheme.D3TOK,
+        encoding_scheme=EncodingScheme.TATWEEL,
+        char_count=2
+    ),
+
+    "morph-d3tok-tatweel3": ProcessingConfig(
+        **default_orthographic_config,
+        morphological_scheme=MorphologicalScheme.D3TOK,
+        encoding_scheme=EncodingScheme.TATWEEL,
+        char_count=3
+    ),
+    
     # D3TOK configurations with different encoding schemes
     "morph-d3tok-space": ProcessingConfig(
-        **best_orthographic_config,
+        **default_orthographic_config,
         morphological_scheme=MorphologicalScheme.D3TOK,
         encoding_scheme=EncodingScheme.SPACE
     ),
