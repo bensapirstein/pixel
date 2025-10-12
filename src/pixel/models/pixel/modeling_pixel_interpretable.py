@@ -51,7 +51,7 @@ logger = logging.getLogger(__name__)
 
 
 class InterpretablePIXELForSequenceClassification(ViTForImageClassification):
-    def __init__(self, config, pooling_mode: PoolingMode = PoolingMode.CLS, add_layer_norm: bool = True):
+    def __init__(self, config, pooling_mode: PoolingMode = PoolingMode.MEAN, add_layer_norm: bool = True):
         super().__init__(config)
 
         if not hasattr(self.config, "interpolate_pos_encoding"):

@@ -45,7 +45,7 @@ def generate_relevance(model: nn.Module, inputs: Dict[str, torch.Tensor], index:
     if index is None:
         index = torch.argmax(output, dim=-1)
 
-    one_hot = torch.zeros((1, output.size()[-1]), dtype=torch.float32)
+    one_hot = torch.zeros((1, output.size()[-1]), dtype=torch.float32).to(output.device)
     one_hot[0, index] = 1
     one_hot = one_hot.requires_grad_(True)
     one_hot = torch.sum(one_hot * output)
@@ -54,7 +54,7 @@ def generate_relevance(model: nn.Module, inputs: Dict[str, torch.Tensor], index:
 
     num_tokens = model.vit.encoder.layer[0].attention.attention.get_attention_map().shape[-1]
 
-    R = torch.eye(num_tokens, num_tokens)
+    R = torch.eye(num_tokens, num_tokens).to(output.device)
     for layer in model.vit.encoder.layer:
         grad = layer.attention.attention.get_attention_gradients()
         cam = layer.attention.attention.get_attention_map()
@@ -66,7 +66,7 @@ def generate_relevance(model: nn.Module, inputs: Dict[str, torch.Tensor], index:
 
 # create heatmap from mask on image
 def show_cam_on_image(img: torch.Tensor, mask: torch.Tensor):
-    heatmap = cv2.applyColorMap(np.uint8(255 * mask), cv2.COLORMAP_JET)
+    heatmap = cv2.applyColorMap(np.uint8(255 * (1-mask)), cv2.COLORMAP_JET)
     heatmap = np.float32(heatmap) / 255
     img = torch.einsum("chw->hwc", unpatchify(patchify(torch.einsum("hwc->chw", img))))
     img = np.float32(img)
@@ -98,7 +98,6 @@ def generate_visualization(
     image_transformer_attribution = (image_transformer_attribution - image_transformer_attribution.min()) / (
         image_transformer_attribution.max() - image_transformer_attribution.min()
     )
-    vis = show_cam_on_image(image_transformer_attribution, transformer_attribution)
-    vis = np.uint8(255 * vis)
+    vis = show_cam_on_image(image_transformer_attribution.cpu(), transformer_attribution.cpu())
     vis = cv2.cvtColor(np.array(vis), cv2.COLOR_RGB2BGR)
     return vis
