@@ -60,6 +60,7 @@ def convert_examples_to_image_features(
             features.append(feature)
         elif inference:
             features.append({
+                "sentence": example.sentence,
                 "pixel_values": pixel_values,
                 "attention_mask": torch.tensor(attention_mask, dtype=torch.long),
                 "label": example.label,
